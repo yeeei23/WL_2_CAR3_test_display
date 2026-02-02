@@ -1,0 +1,64 @@
+# host 빌드: qmake 스펙 없이 g++/moc 사용 (로컬에 Qt 개발 패키지 필요)
+# 사용: make -f Makefile.gcc
+
+CXX     ?= g++
+MOC     ?= moc
+TARGET   = test_spk_host
+SOURCES  = main.cpp TriggerServer.cpp
+HEADERS  = TriggerServer.h
+MOC_SRC  = moc_TriggerServer.cpp
+
+# Qt 경로: qmake -query 사용 (qmake는 있어야 함)
+QT_QUERY = qmake -query
+QT_INC   = $(shell $(QT_QUERY) QT_INSTALL_HEADERS 2>/dev/null)
+QT_LIB   = $(shell $(QT_QUERY) QT_INSTALL_LIBS 2>/dev/null)
+QT_BIN   = $(shell $(QT_QUERY) QT_INSTALL_BINS 2>/dev/null)
+
+# qmake에서 경로를 못 찾으면 moc만 PATH에서 찾고, include/lib는 일반 경로 사용
+ifeq ($(QT_INC),)
+  QT_INC = /usr/include
+  ifneq ($(wildcard /usr/include/x86_64-linux-gnu/qt5),)
+    QT_INC = /usr/include/x86_64-linux-gnu/qt5
+  endif
+  ifneq ($(wildcard /usr/include/aarch64-linux-gnu/qt5),)
+    QT_INC = /usr/include/aarch64-linux-gnu/qt5
+  endif
+endif
+ifeq ($(QT_LIB),)
+  QT_LIB = /usr/lib
+  ifneq ($(wildcard /usr/lib/x86_64-linux-gnu),)
+    QT_LIB = /usr/lib/x86_64-linux-gnu
+  endif
+  ifneq ($(wildcard /usr/lib/aarch64-linux-gnu),)
+    QT_LIB = /usr/lib/aarch64-linux-gnu
+  endif
+endif
+ifneq ($(QT_BIN),)
+  MOC := $(QT_BIN)/moc
+endif
+
+CXXFLAGS = -std=c++11 -Wall -O2 -fPIC \
+  -I$(QT_INC) -I$(QT_INC)/QtCore -I$(QT_INC)/QtGui -I$(QT_INC)/QtQml -I$(QT_INC)/QtQuick -I$(QT_INC)/QtNetwork
+LDFLAGS  = -L$(QT_LIB) -lQt5Quick -lQt5Qml -lQt5Network -lQt5Gui -lQt5Core -lpthread
+
+OBJS = main.o TriggerServer.o moc_TriggerServer.o
+
+$(TARGET): $(OBJS)
+	$(CXX) -o $(TARGET) $(OBJS) $(LDFLAGS)
+
+$(MOC_SRC): TriggerServer.h
+	$(MOC) -o $@ $<
+
+main.o: main.cpp TriggerServer.h
+	$(CXX) $(CXXFLAGS) -c -o $@ main.cpp
+
+TriggerServer.o: TriggerServer.cpp TriggerServer.h
+	$(CXX) $(CXXFLAGS) -c -o $@ TriggerServer.cpp
+
+moc_TriggerServer.o: $(MOC_SRC)
+	$(CXX) $(CXXFLAGS) -c -o $@ $(MOC_SRC)
+
+clean:
+	rm -f $(TARGET) $(OBJS) $(MOC_SRC)
+
+.PHONY: clean
